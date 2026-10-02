@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RealityCheck AI — Evidence before conclusions</title>
+<meta name="description" content="RealityCheck AI investigates claims, images and information by comparing available evidence and showing you where it comes from.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap nav-inner">
+    <a href="#top" class="logo" aria-label="RealityCheck AI home">
+      <svg class="logo-mark" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <circle cx="12" cy="12" r="9" stroke="#4FC7DB" stroke-width="1.6"></circle>
+        <path d="M8 12.5L10.7 15L16 9" stroke="#4FC7DB" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path>
+      </svg>
+      RealityCheck<span style="color:var(--text-muted); font-weight:400;">&nbsp;AI</span>
+    </a>
+    <ul class="nav-links">
+      <li><a href="#how-it-works">How It Works</a></li>
+      <li><a href="#investigate-panel">Investigate</a></li>
+      <li><a href="#evidence">Evidence</a></li>
+      <li><a href="#about">About</a></li>
+    </ul>
+    <div class="nav-actions">
+      <a href="#" class="btn btn-ghost btn-sm" id="sign-in-btn">Sign in — Coming soon</a>
+      <a href="#investigate-panel" class="btn btn-primary btn-sm">Start Investigation</a>
+    </div>
+  </div>
+</header>
+
+<main id="app">
+
+<!-- ===================== HOME SCREEN ===================== -->
+<div id="screen-home">
+
+  <section class="hero" id="top">
+    <div class="wrap">
+      <span class="eyebrow"><span class="eyebrow-dot"></span>AI-powered evidence investigation</span>
+      <h1>Know what's true.<br>See the evidence.</h1>
+      <p class="hero-sub">RealityCheck AI investigates claims, images and information by comparing available evidence and showing you where it comes from.</p>
+      <p class="hero-sub" style="margin-top:10px; color: var(--text); font-weight:500;">Don't just get an answer. See how the answer was established.</p>
+
+      <div class="panel" id="investigate-panel">
+        <h2 class="panel-title">What do you want to check?</h2>
+        <div class="panel-input-row">
+          <textarea id="investigate-input" class="investigate-input" placeholder="Enter a claim or paste a URL…" rows="2"></textarea>
+
+          <div id="image-preview" class="panel-preview">
+            <span class="preview-empty">
+              <span class="panel-preview-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="5" width="18" height="14" rx="2"></rect><circle cx="8.5" cy="10" r="1.5"></circle><path d="M21 15l-5-5-9 9"></path></svg>
+              </span>
+              <span class="panel-preview-text"><strong>No image selected</strong><br>Local metadata only — nothing is uploaded anywhere</span>
+            </span>
+            <span class="preview-filled">
+              <img id="preview-img" alt="Selected image preview">
+              <span class="panel-preview-text"><strong id="preview-filename"></strong><br>Metadata read locally in your browser</span>
+            </span>
+          </div>
+          <input type="file" id="image-file-input" accept="image/*" style="display:none">
+
+          <div id="image-metadata-block" class="understanding-block" style="margin-top:14px; display:none;"></div>
+
+          <div class="panel-tools">
+            <button type="button" class="tool-btn" id="upload-btn">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 16V4M12 4L7 9M12 4l5 5"></path><path d="M4 16v3a2 2 0 002 2h12a2 2 0 002-2v-3"></path></svg>
+              Upload Image
+            </button>
+            <button type="button" class="tool-btn" id="url-btn">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M9 15l6-6M10 6.5l.7-.7a3.5 3.5 0 015 5l-.7.7M14 17.5l-.7.7a3.5 3.5 0 01-5-5l.7-.7"></path></svg>
+              Paste URL
+            </button>
+          </div>
+
+          <div class="panel-submit-row">
+            <span class="panel-hint" id="panel-hint">Evidence first. Conclusions second.</span>
+            <button type="button" class="btn btn-primary check-btn" id="check-btn">Check now</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="features">
+    <div class="wrap">
+      <div class="block-head">
+        <h2>Try an example</h2>
+        <p>See the kind of thing RealityCheck is built to investigate.</p>
+      </div>
+      <div class="examples-grid">
+
+        <div class="example-card">
+          <span class="example-kind">Health claim</span>
+          <p class="example-q">Is this widely shared health advice supported by evidence?</p>
+          <button class="example-try" data-claim="Scientists have discovered that drinking warm water cures diabetes.">Try example →</button>
+        </div>
+
+        <div class="example-card">
+          <span class="example-kind">News claim</span>
+          <p class="example-q">Is this statement supported by reliable sources?</p>
+          <button class="example-try" data-claim="A recent statement claims unemployment fell to a 10-year low this quarter.">Try example →</button>
+        </div>
+
+        <div class="example-card">
+          <span class="example-kind">Online claim</span>
+          <p class="example-q">Can this information be independently verified?</p>
+          <button class="example-try" data-claim="A widely shared post states that a new law bans a common household product nationwide.">Try example →</button>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="how-it-works">
+    <div class="wrap">
+      <div class="block-head">
+        <h2>How RealityCheck investigates</h2>
+        <p>Four steps, applied to every claim or URL you submit.</p>
+      </div>
+      <div class="steps-grid">
+        <div class="step-item">
+          <div class="step-num">01</div>
+          <div class="step-title">Understand</div>
+          <div class="step-desc">Identify exactly what is being claimed.</div>
+        </div>
+        <div class="step-item">
+          <div class="step-num">02</div>
+          <div class="step-title">Investigate</div>
+          <div class="step-desc">Find relevant available sources and original material.</div>
+        </div>
+        <div class="step-item">
+          <div class="step-num">03</div>
+          <div class="step-title">Cross-check</div>
+          <div class="step-desc">Compare sources, dates, origins and contradictions.</div>
+        </div>
+        <div class="step-item">
+          <div class="step-num">04</div>
+          <div class="step-title">Assess</div>
+          <div class="step-desc">Present the evidence and explain the uncertainty.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="evidence">
+    <div class="wrap">
+      <div class="block-head">
+        <h2>The evidence chain</h2>
+        <p>Instead of simply giving you an answer, RealityCheck shows how the conclusion was reached.</p>
+      </div>
+      <div class="chain" id="chain-home"><div class="chain-node"><span class="chain-dot"></span><span class="chain-label">Claim</span></div><div class="chain-line"></div><div class="chain-node"><span class="chain-dot"></span><span class="chain-label">Evidence</span></div><div class="chain-line"></div><div class="chain-node"><span class="chain-dot"></span><span class="chain-label">Sources</span></div><div class="chain-line"></div><div class="chain-node"><span class="chain-dot"></span><span class="chain-label">Original material</span></div><div class="chain-line"></div><div class="chain-node"><span class="chain-dot"></span><span class="chain-label">Timeline</span></div><div class="chain-line"></div><div class="chain-node"><span class="chain-dot"></span><span class="chain-label">Cross-check</span></div><div class="chain-line"></div><div class="chain-node"><span class="chain-dot"></span><span class="chain-label">Contradictions</span></div><div class="chain-line"></div><div class="chain-node"><span class="chain-dot"></span><span class="chain-label">Assessment</span></div></div>
+      <p class="chain-caption">A URL or a claim isn't evidence by itself — evidence is what's found when a source is checked against original material, dates and other sources.</p>
+    </div>
+  </section>
+
+  <section class="block" id="about">
+    <div class="wrap">
+      <div class="block-head">
+        <h2>How a check is assessed</h2>
+        <p>Every investigation ends in one of six outcomes. RealityCheck does not claim certainty it doesn't have.</p>
+      </div>
+      <div class="assess-grid">
+        <div class="assess-card" style="--c: var(--verified)">
+          <div class="assess-title">Verified</div>
+          <div class="assess-desc">Strong evidence supports the claim.</div>
+        </div>
+        <div class="assess-card" style="--c: var(--partial)">
+          <div class="assess-title">Partially verified</div>
+          <div class="assess-desc">Some parts are supported while others remain uncertain.</div>
+        </div>
+        <div class="assess-card" style="--c: var(--contradicted)">
+          <div class="assess-title">Contradicted</div>
+          <div class="assess-desc">Reliable evidence conflicts with the claim.</div>
+        </div>
+        <div class="assess-card" style="--c: var(--insufficient)">
+          <div class="assess-title">Insufficient evidence</div>
+          <div class="assess-desc">There isn't enough reliable evidence to reach a conclusion.</div>
+        </div>
+        <div class="assess-card" style="--c: var(--unresolved)">
+          <div class="assess-title">Unresolved</div>
+          <div class="assess-desc">Available evidence conflicts with itself, so a responsible conclusion can't be reached either way.</div>
+        </div>
+        <div class="assess-card" style="--c: var(--manipulation)">
+          <div class="assess-title">Potential manipulation</div>
+          <div class="assess-desc">Technical or contextual indicators suggest the content may have been altered or misleadingly presented. Further verification may be required.</div>
+        </div>
+      </div>
+      <p class="disclaimer">RealityCheck AI does not guarantee truth. It shows you the evidence it can find and how confident that evidence is.</p>
+    </div>
+  </section>
+
+</div>
+
+<!-- ===================== INVESTIGATING SCREEN ===================== -->
+<div id="screen-investigating" class="hidden">
+  <div class="investigating-wrap">
+    <div class="investigating-card">
+      <div class="spinner" aria-hidden="true"></div>
+      <h2 class="investigating-title">Investigating…</h2>
+      <p class="investigating-claim" id="investigating-claim-text"></p>
+
+      <ul class="check-list" id="check-list" aria-live="polite">
+        <li class="check-item" data-step="0"><span class="check-icon"><svg viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-6" stroke="#6FCF97" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path></svg></span>Understanding the claim</li>
+        <li class="check-item" data-step="1"><span class="check-icon"><svg viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-6" stroke="#6FCF97" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path></svg></span>Searching available sources</li>
+        <li class="check-item" data-step="2"><span class="check-icon"><svg viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-6" stroke="#6FCF97" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path></svg></span>Finding original material</li>
+        <li class="check-item" data-step="3"><span class="check-icon"><svg viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-6" stroke="#6FCF97" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path></svg></span>Comparing dates</li>
+        <li class="check-item" data-step="4"><span class="check-icon"><svg viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-6" stroke="#6FCF97" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path></svg></span>Checking contradictions</li>
+        <li class="check-item" data-step="5"><span class="check-icon"><svg viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-6" stroke="#6FCF97" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path></svg></span>Preparing assessment</li>
+      </ul>
+
+      <p class="demo-note" id="investigating-status" style="margin-top:22px; text-align:left;"></p>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== RESULTS SCREEN ===================== -->
+<div id="screen-results" class="hidden">
+  <div class="wrap results-wrap">
+    <div class="results-topbar">
+      <button class="btn btn-ghost btn-sm" id="back-btn">← New check</button>
+      <span class="demo-tag" id="results-mode-tag"></span>
+    </div>
+    <p class="demo-note" id="results-mode-note" style="margin-top:-20px; margin-bottom:32px;"></p>
+
+    <div class="claim-card">
+      <div class="claim-label">Claim submitted</div>
+      <p class="claim-text" id="results-claim-text"></p>
+      <div class="claim-meta">
+        <div class="meta-item">
+          <div class="meta-k">Assessment</div>
+          <div class="meta-v" id="results-assessment"></div>
+        </div>
+        <div class="meta-item">
+          <div class="meta-k">Evidence basis</div>
+          <div class="meta-v" id="results-basis"></div>
+          <div class="confidence-caption">No numeric score — source quality is shown per source instead.</div>
+        </div>
+      </div>
+      <button class="why-toggle" id="why-toggle" aria-expanded="false" aria-controls="why-panel">Why this assessment?</button>
+    </div>
+
+    <div id="results-body"></div>
+
+    <div class="results-actions">
+      <button class="btn btn-primary" id="new-check-btn">Start a new check</button>
+      <button class="btn btn-ghost" id="back-btn-2">Back to home</button>
+    </div>
+  </div>
+</div>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="footer-top">
+      <div class="footer-brand">
+        <a href="#top" class="logo" style="margin-bottom:8px;">
+          <svg class="logo-mark" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <circle cx="12" cy="12" r="9" stroke="#4FC7DB" stroke-width="1.6"></circle>
+            <path d="M8 12.5L10.7 15L16 9" stroke="#4FC7DB" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path>
+          </svg>
+          RealityCheck<span style="color:var(--text-muted); font-weight:400;">&nbsp;AI</span>
+        </a>
+        <p class="footer-tag">Evidence before conclusions.</p>
+      </div>
+      <ul class="footer-links">
+        <li><a href="#how-it-works">How It Works</a></li>
+        <li><a href="#features">Features</a></li>
+        <li><a href="#about">About</a></li>
+      </ul>
+    </div>
+    <div class="footer-bottom">Prototype — Phase 2 investigation engine.</div>
+  </div>
+</footer>
+
+<div class="tooltip-msg" id="tooltip" role="status"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/exifr@7.1.3/dist/full.umd.js"></script>
+<script src="engine.js"></script>
+</body>
+</html>
