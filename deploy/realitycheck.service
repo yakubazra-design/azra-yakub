@@ -1,0 +1,93 @@
+# RealityCheck AI — systemd unit template for a single-host pilot.
+#
+# ADAPT every path, user, and group marked below before installing.
+# Install example (paths are illustrative):
+#   sudo install -m 0644 deploy/realitycheck.service /etc/systemd/system/realitycheck.service
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now realitycheck.service
+#
+# After adapting paths on the host, validate the unit (expected to pass there):
+#   systemd-analyze verify /etc/systemd/system/realitycheck.service
+# A missing interpreter path on a developer workstation is expected for this
+# template and is not a production failure.
+#
+# Requirements encoded here:
+#   - exactly one Uvicorn worker (SQLite has one writer)
+#   - listen on 127.0.0.1:8000 only (HTTPS terminates at Caddy or nginx)
+#   - dedicated non-root service account
+#   - production EnvironmentFile outside the web root
+#   - PYTHONDONTWRITEBYTECODE=1 so ProtectSystem=strict does not need a
+#     writable application source tree for __pycache__
+#   - PrivateDevices is omitted so multiprocessing Queue used by
+#     backend/app/c2pa_reader.py can use /dev/shm
+#
+# Do not claim trusted C2PA verification with this unit. Choice A pilot
+# leaves C2PA trust unset in the environment file.
+
+[Unit]
+Description=RealityCheck AI (single-host pilot)
+Documentation=file:///opt/realitycheck/deploy/PILOT_RUNBOOK.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+
+# ADAPT: dedicated non-root account created on the host.
+User=realitycheck
+Group=realitycheck
+
+# ADAPT: application checkout root (contains backend/ and frontend/).
+WorkingDirectory=/opt/realitycheck
+
+# ADAPT: private production env file (mode 0600, not under frontend/).
+EnvironmentFile=/etc/realitycheck/production.env
+
+# Ensure the backend package imports cleanly regardless of install layout.
+Environment=PYTHONPATH=backend
+# Prevent bytecode writes under ProtectSystem=strict (app tree stays read-only).
+Environment=PYTHONDONTWRITEBYTECODE=1
+
+# Exactly one worker. Do not raise --workers.
+# ADAPT: python interpreter if using a virtualenv, e.g. /opt/realitycheck/.venv/bin/python3
+ExecStart=/opt/realitycheck/.venv/bin/python3 -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 1
+
+# Restart on unexpected exit; not on clean stop.
+Restart=on-failure
+RestartSec=5
+
+# Allow the process a short window to finish in-flight requests.
+TimeoutStartSec=60
+TimeoutStopSec=30
+KillMode=mixed
+KillSignal=SIGTERM
+
+# Hardening that preserves SQLite, asset writes, venv, and outbound HTTPS.
+NoNewPrivileges=true
+PrivateTmp=true
+# PrivateDevices is intentionally not set. c2pa_reader.run_bounded uses
+# multiprocessing spawn and Queue, which need /dev/shm on Linux. Prefer this
+# over BindPaths=/dev/shm. Other restrictions below remain in force.
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+LockPersonality=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+RestrictNamespaces=true
+# AF_INET/AF_INET6 required for OpenAI and Parallel; AF_UNIX for local sockets.
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+# Do not set MemoryDenyWriteExecute: the pinned c2pa-python native extension needs writable executable mappings.
+
+# ADAPT: writable locations for the ledger directory (and its assets/ sibling
+# plus WAL/SHM and restore journal files in the same directory).
+ReadWritePaths=/var/lib/realitycheck
+
+# Capability drop: binding 127.0.0.1:8000 does not require CAP_NET_BIND_SERVICE.
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+[Install]
+WantedBy=multi-user.target
