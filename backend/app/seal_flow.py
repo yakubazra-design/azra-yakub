@@ -624,6 +624,7 @@ _VIDEO_SEAL_FAILURE_CODES = frozenset({
     "video_not_ready",
     "video_identity_mismatch",
     "video_seal_busy",
+    "video_seal_integration_disabled",
 })
 
 

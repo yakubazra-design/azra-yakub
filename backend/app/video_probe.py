@@ -957,6 +957,15 @@ def _ffprobe_version_line(ffprobe: str) -> str:
     host for version diagnostics.
     """
     del ffprobe  # Path is fixed at boot; retained for call-site compatibility.
+    return sandboxed_ffprobe_version()
+
+
+def sandboxed_ffprobe_version() -> str:
+    """Public read of the boot-captured sandboxed FFprobe version string.
+
+    Never shells out on the host. Empty cache returns the placeholder
+    ``ffprobe``. Used by Stage 3.C processing-run persistence only.
+    """
     cached = _ffprobe_version_cache.strip()
     return cached[:200] if cached else "ffprobe"
 

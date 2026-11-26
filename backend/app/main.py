@@ -13,6 +13,7 @@ import ipaddress
 import logging
 import sqlite3
 import threading
+import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -42,6 +43,7 @@ from app.config import Settings
 from app.errors import ProviderError
 from app.evidence import build_timeline, date_fields, independence, prepare_sources
 from app.image_evidence import build_image_evidence
+from app.video_evidence import build_video_evidence, check_sealed_video_availability
 from app.images import IMAGE_CONSENT_VERSION, client_hash_status, detect_image
 from app.metadata_extract import classify_metadata_consent
 from app.ledger import (
@@ -62,7 +64,12 @@ from app.video_detect import (
     classify_video_metadata_consent,
     detect_video_container,
 )
-from app.video_probe import VideoProbeError, probe_video_file, tier_a_ready
+from app.video_probe import (
+    VideoProbeError,
+    probe_video_file,
+    sandboxed_ffprobe_version,
+    tier_a_ready,
+)
 from app.video_store import VideoStore, VideoStoreError
 from app.openai_client import OpenAIClient
 from app.parallel_client import ParallelClient
@@ -166,6 +173,10 @@ class AssessRequest(BaseModel):
     timeline: dict = Field(default_factory=dict)
     snapshot: dict | None = None
     imageEvidence: dict | None = None
+    # Client-authored sealedVideo / videoEvidence are ignored; listed so extras
+    # are accepted by the request model without becoming authoritative.
+    sealedVideo: dict | None = None
+    videoEvidence: dict | None = None
 
 
 class InvestigationRequest(BaseModel):
@@ -229,6 +240,61 @@ def _public_video(record: dict) -> dict:
         "frameRate": record.get("frameRate"),
         "bitRate": record.get("bitRate"),
     }
+
+
+def _project_video_evidence(
+    *,
+    ledger,
+    store,
+    owner_id: str,
+    investigation_id: str,
+    snapshot_id: str,
+    sealed_video=None,
+):
+    """Build owner-facing videoEvidence from the sealed snapshot (Option A).
+
+    Never trusts client fields. Never returns storage names or paths.
+    Re-verifies retained bytes under the owner flock before reporting retained.
+    """
+    sealed = sealed_video
+    if sealed is None:
+        try:
+            sealed = ledger.sealed_video_from_snapshot(owner_id, investigation_id, snapshot_id)
+        except (LedgerError, sqlite3.Error):
+            return None
+    if not isinstance(sealed, dict):
+        return None
+    lock_handle = None
+    lock_acquired = False
+    asset_record = None
+    if store is not None:
+        try:
+            lock_handle = store.try_acquire_upload_lock(owner_id)
+            lock_acquired = lock_handle is not None
+        except VideoStoreError:
+            lock_acquired = False
+            lock_handle = None
+    try:
+        if lock_acquired:
+            try:
+                asset_record = ledger.video_asset(owner_id, investigation_id)
+            except (LedgerError, sqlite3.Error):
+                asset_record = None
+        availability, checked_at = check_sealed_video_availability(
+            store=store,
+            asset_record=asset_record,
+            sealed_video=sealed,
+            lock_acquired=lock_acquired,
+        )
+    finally:
+        if lock_handle is not None and store is not None:
+            store.release_upload_lock(lock_handle)
+    return build_video_evidence(
+        sealed,
+        availability=availability,
+        checked_at=checked_at,
+        snapshot_id=snapshot_id,
+    )
 
 
 def _video_ingest_disabled() -> JSONResponse:
@@ -360,6 +426,29 @@ def _video_names_for_investigation(ledger, owner_id: str, investigation_id: str,
     return sorted(names)
 
 
+def _remove_video_files_locked(store, owner_id: str, video_names: list[str]) -> tuple[bool, bool, bool]:
+    """Unlink video objects under the owner flock shared with upload/seal.
+
+    Lock order: a single owner-scoped ``fcntl`` lock only (no nested locks).
+    If the lock cannot be acquired, fail closed so erasure does not report
+    success while protected video bytes may remain.
+    """
+    if not video_names:
+        return False, False, False
+    if store is None:
+        return False, True, False
+    try:
+        lock_handle = store.try_acquire_upload_lock(owner_id)
+    except VideoStoreError:
+        return False, True, False
+    if lock_handle is None:
+        return False, True, False
+    try:
+        return _remove_named_files(store, video_names)
+    finally:
+        store.release_upload_lock(lock_handle)
+
+
 def _remove_account_files(app, ledger, owner_id: str) -> tuple[bool, bool, bool]:
     try:
         names = _names_for_account(app, ledger, owner_id)
@@ -367,7 +456,7 @@ def _remove_account_files(app, ledger, owner_id: str) -> tuple[bool, bool, bool]
     except (LedgerError, sqlite3.Error, AssetStoreError, VideoStoreError):
         return False, True, False
     image_result = _remove_named_files(app.state.assets, names)
-    video_result = _remove_named_files(app.state.videos, video_names)
+    video_result = _remove_video_files_locked(app.state.videos, owner_id, video_names)
     return _merge_removal(image_result, video_result)
 
 
@@ -379,7 +468,7 @@ def _remove_investigation_files(app, ledger, owner_id: str, investigation_id: st
     except (LedgerError, sqlite3.Error, AssetStoreError, VideoStoreError):
         return False, True, False
     image_result = _remove_named_files(app.state.assets, names)
-    video_result = _remove_named_files(app.state.videos, video_names)
+    video_result = _remove_video_files_locked(app.state.videos, owner_id, video_names)
     return _merge_removal(image_result, video_result)
 
 
@@ -1400,6 +1489,14 @@ def create_app(
                     "message": "The video could not be sealed while another upload is in progress.",
                 },
             )
+        if outcome["code"] == "video_seal_integration_disabled":
+            return JSONResponse(
+                status_code=409,
+                content={
+                    "code": "video_seal_integration_disabled",
+                    "message": "An attached video cannot be sealed while video seal integration is disabled.",
+                },
+            )
         if outcome["code"] == "deletion_in_progress":
             return _deletion_in_progress()
         if outcome["code"] == "not_found":
@@ -1443,8 +1540,15 @@ def create_app(
         except (LedgerError, sqlite3.Error):
             existing = None
         if existing is not None and existing.get("status") == "completed":
-            return _public_assessment_response(existing)
+            return _public_assessment_response(
+                existing,
+                ledger=ledger,
+                owner_id=case["owner_id"],
+                investigation_id=investigation_id,
+            )
 
+        # Model context stays image-only. sealedVideo / videoEvidence are never
+        # added to the prompt (Stage 3.B decision 8).
         ctx = {
             "primaryClaim": snapshot.get("primaryClaim") or "",
             "verifiablePoints": snapshot.get("verifiablePoints") or [],
@@ -1484,6 +1588,16 @@ def create_app(
             embedded=snapshot.get("embeddedMetadata"),
             snapshot_id=snapshot_id,
             provenance=snapshot.get("provenance") if isinstance(snapshot, dict) and "provenance" in snapshot else None,
+        )
+        # Project videoEvidence from sealed snapshot only. Client body fields
+        # sealedVideo / videoEvidence are ignored. Not persisted (Option A).
+        result["videoEvidence"] = _project_video_evidence(
+            ledger=ledger,
+            store=app.state.videos,
+            owner_id=case["owner_id"],
+            investigation_id=investigation_id,
+            snapshot_id=snapshot_id,
+            sealed_video=snapshot.get("sealedVideo") if isinstance(snapshot.get("sealedVideo"), dict) else None,
         )
         try:
             saved = ledger.save_completed_assessment(
@@ -1532,7 +1646,13 @@ def create_app(
             )
         return result
 
-    def _public_assessment_response(saved: dict) -> dict | JSONResponse:
+    def _public_assessment_response(
+        saved: dict,
+        *,
+        ledger,
+        owner_id: str,
+        investigation_id: str,
+    ) -> dict | JSONResponse:
         """Shape a stored completed assessment like the live assess response."""
         if saved.get("status") != "completed":
             return _missing()
@@ -1548,6 +1668,17 @@ def create_app(
         }
         if saved.get("imageEvidence") is not None:
             body["imageEvidence"] = saved["imageEvidence"]
+        snapshot_id = saved.get("snapshotId") if isinstance(saved.get("snapshotId"), str) else ""
+        if snapshot_id:
+            body["videoEvidence"] = _project_video_evidence(
+                ledger=ledger,
+                store=app.state.videos,
+                owner_id=owner_id,
+                investigation_id=investigation_id,
+                snapshot_id=snapshot_id,
+            )
+        else:
+            body["videoEvidence"] = None
         return body
 
     @app.get("/api/investigations/{investigation_id}/assessments")
@@ -1575,7 +1706,12 @@ def create_app(
             return _unavailable()
         if saved is None:
             return _missing()
-        return _public_assessment_response(saved)
+        return _public_assessment_response(
+            saved,
+            ledger=ledger,
+            owner_id=case["owner_id"],
+            investigation_id=investigation_id,
+        )
 
     @app.get("/api/investigations/{investigation_id}/assessments/{snapshot_id}")
     def assessment_by_snapshot(investigation_id: str, snapshot_id: str, request: Request):
@@ -1593,7 +1729,12 @@ def create_app(
         if saved is None:
             return _missing()
         if saved.get("status") == "completed":
-            return _public_assessment_response(saved)
+            return _public_assessment_response(
+                saved,
+                ledger=ledger,
+                owner_id=case["owner_id"],
+                investigation_id=investigation_id,
+            )
         # Failed attempt for this snapshot — not a completed outcome.
         return {
             "assessmentResultId": saved.get("assessmentResultId"),
@@ -1864,6 +2005,20 @@ def create_app(
                 store.unlink_partial(partial)
                 return _unavailable()
 
+            # Stage 3.C: persist a user-upload probe run only after container
+            # validation. Boot/canary paths never call start_video_probe_run.
+            try:
+                probe_run_id = ledger.start_video_probe_run(
+                    case["owner_id"],
+                    investigation_id,
+                    isolation_tier="A",
+                    toolchain_version=sandboxed_ffprobe_version(),
+                )
+            except (LedgerError, sqlite3.Error):
+                store.unlink_partial(partial)
+                return _unavailable()
+
+            probe_started = time.monotonic()
             try:
                 probe = probe_video_file(
                     partial,
@@ -1871,6 +2026,18 @@ def create_app(
                     ffprobe_path=settings.ffprobe_path,
                 )
             except VideoProbeError as exc:
+                resource_ms = max(0, int((time.monotonic() - probe_started) * 1000))
+                try:
+                    ledger.complete_video_probe_run(
+                        case["owner_id"],
+                        probe_run_id,
+                        status="failed",
+                        failure_code=exc.code,
+                        toolchain_version=sandboxed_ffprobe_version(),
+                        resource_ms=resource_ms,
+                    )
+                except (LedgerError, sqlite3.Error):
+                    pass
                 store.unlink_partial(partial)
                 status = 503 if exc.code in {
                     "video_isolation_insufficient",
@@ -1881,10 +2048,11 @@ def create_app(
                                 "hevc_not_allowed", "av1_not_allowed", "duration_out_of_range",
                                 "dimensions_out_of_range", "pixels_out_of_range", "frame_rate_out_of_range",
                                 "bitrate_out_of_range", "audio_streams_exceeded", "container_not_allowed",
-                                "mov_without_ftyp"}:
+                                "mov_without_ftyp", "probe_output_too_large"}:
                     status = 400
                 return _video_error(status, exc.code, exc.message)
 
+            resource_ms = max(0, int((time.monotonic() - probe_started) * 1000))
             digest = hasher.hexdigest()
             supplied = request.headers.get("x-client-sha256", "")
             hash_status = client_hash_status(supplied, digest)
@@ -1899,6 +2067,16 @@ def create_app(
                     byte_length=byte_length,
                 )
             except VideoStoreError:
+                try:
+                    ledger.complete_video_probe_run(
+                        case["owner_id"],
+                        probe_run_id,
+                        status="failed",
+                        failure_code="video_store_unavailable",
+                        resource_ms=resource_ms,
+                    )
+                except (LedgerError, sqlite3.Error):
+                    pass
                 store.unlink_partial(partial)
                 return _unavailable()
             partial = None
@@ -1934,6 +2112,16 @@ def create_app(
                     )
                 except Exception:
                     pass
+                try:
+                    ledger.complete_video_probe_run(
+                        case["owner_id"],
+                        probe_run_id,
+                        status="failed",
+                        failure_code="ledger_persist_failed",
+                        resource_ms=resource_ms,
+                    )
+                except (LedgerError, sqlite3.Error):
+                    pass
                 store.remove(storage_name)
                 return _unavailable()
             if outcome != "saved":
@@ -1942,6 +2130,20 @@ def create_app(
                         case["owner_id"], investigation_id, storage_name, digest, byte_length, outcome
                     )
                 except Exception:
+                    pass
+                try:
+                    ledger.complete_video_probe_run(
+                        case["owner_id"],
+                        probe_run_id,
+                        status="failed",
+                        failure_code=(
+                            "video_after_seal" if outcome == "sealed"
+                            else "deletion_in_progress" if outcome == "deleting"
+                            else "video_asset_not_saved"
+                        ),
+                        resource_ms=resource_ms,
+                    )
+                except (LedgerError, sqlite3.Error):
                     pass
                 store.remove(storage_name)
                 if outcome == "sealed":
@@ -1952,6 +2154,17 @@ def create_app(
             try:
                 store.finish_intent(storage_name)
             except VideoStoreError:
+                try:
+                    ledger.complete_video_probe_run(
+                        case["owner_id"],
+                        probe_run_id,
+                        status="failed",
+                        failure_code="video_store_unavailable",
+                        video_asset_id=asset_id,
+                        resource_ms=resource_ms,
+                    )
+                except (LedgerError, sqlite3.Error):
+                    pass
                 return _unavailable()
             if previous and previous != storage_name:
                 if store.remove(previous):
@@ -1959,6 +2172,25 @@ def create_app(
                         ledger.finish_video_cleanup(previous)
                     except Exception:
                         pass
+            # Probe succeeded and asset is durable — recording the run is required
+            # for durable success. Do not return success if this persistence fails.
+            try:
+                finished = ledger.complete_video_probe_run(
+                    case["owner_id"],
+                    probe_run_id,
+                    status="succeeded",
+                    video_asset_id=asset_id,
+                    toolchain_version=(
+                        probe.get("toolchain_version")
+                        if isinstance(probe.get("toolchain_version"), str)
+                        else sandboxed_ffprobe_version()
+                    ),
+                    resource_ms=resource_ms,
+                )
+            except (LedgerError, sqlite3.Error):
+                return _unavailable()
+            if not finished:
+                return _unavailable()
             record = ledger.video_asset(case["owner_id"], investigation_id)
             if record is None:
                 return _unavailable()
@@ -1985,10 +2217,12 @@ def create_app(
     def delete_video(investigation_id: str, request: Request):
         """Remove the video attachment.
 
-        Order: durable cleanup row → unlink bytes → delete asset row → finish
-        cleanup. Never reports success while bytes remain. When unlink fails,
-        the asset row is kept so DELETE can be retried; the cleanup row also
-        remains for startup reconcile recovery without requiring the asset row.
+        Order: owner flock → durable cleanup row → unlink bytes → delete asset
+        row → finish cleanup. The flock is the same single-host owner lock used
+        by upload and seal so concurrent promotion/hash cannot race unlink.
+        Never reports success while bytes remain. When unlink fails, the asset
+        row is kept so DELETE can be retried; the cleanup row also remains for
+        startup reconcile recovery without requiring the asset row.
         """
         if not settings.video_ingest_enabled:
             return _video_ingest_disabled()
@@ -2005,24 +2239,62 @@ def create_app(
         if store is None:
             return _unavailable()
         try:
-            prior = ledger.prepare_video_removal(case["owner_id"], investigation_id)
-        except (LedgerError, sqlite3.Error):
+            lock_handle = store.try_acquire_upload_lock(case["owner_id"])
+        except VideoStoreError:
             return _unavailable()
-        if prior is not None and prior.get("__sealed__"):
-            return _video_error(409, "video_after_seal", "A sealed video cannot be removed.")
-        if prior is None:
-            # Retry path: asset row already gone but cleanup still pending.
+        if lock_handle is None:
+            return _video_error(
+                409,
+                "video_operation_in_progress",
+                "A video operation is already in progress for this account.",
+            )
+        try:
             try:
-                pending = ledger.pending_video_cleanup_for_investigation(
-                    case["owner_id"], investigation_id
+                prior = ledger.prepare_video_removal(case["owner_id"], investigation_id)
+            except (LedgerError, sqlite3.Error):
+                return _unavailable()
+            if prior is not None and prior.get("__sealed__"):
+                return _video_error(409, "video_after_seal", "A sealed video cannot be removed.")
+            if prior is None:
+                # Retry path: asset row already gone but cleanup still pending.
+                try:
+                    pending = ledger.pending_video_cleanup_for_investigation(
+                        case["owner_id"], investigation_id
+                    )
+                except (LedgerError, sqlite3.Error):
+                    return _unavailable()
+                if pending is None:
+                    return _video_error(404, "video_not_found", "That video was not found.")
+                storage_name = pending["storage_name"]
+                report = store.remove_report(storage_name)
+                if report == "failed":
+                    return JSONResponse(
+                        status_code=500,
+                        content={
+                            "ok": False,
+                            "code": "video_cleanup_failed",
+                            "message": "The video attachment could not be removed. The deletion can be retried safely.",
+                            "assetBytesDeleted": False,
+                        },
+                    )
+                try:
+                    ledger.finish_video_cleanup(storage_name)
+                except (LedgerError, sqlite3.Error):
+                    return _unavailable()
+                return {"ok": True, "removed": True}
+
+            storage_name = prior.get("storageName")
+            digest = prior.get("sha256") or ""
+            byte_length = int(prior.get("byteLength") or 0)
+            try:
+                ledger.record_video_cleanup(
+                    case["owner_id"], investigation_id, storage_name, digest, byte_length, "user_removed"
                 )
             except (LedgerError, sqlite3.Error):
                 return _unavailable()
-            if pending is None:
-                return _video_error(404, "video_not_found", "That video was not found.")
-            storage_name = pending["storage_name"]
             report = store.remove_report(storage_name)
             if report == "failed":
+                # Asset row intentionally retained for retry; cleanup row is durable.
                 return JSONResponse(
                     status_code=500,
                     content={
@@ -2033,43 +2305,18 @@ def create_app(
                     },
                 )
             try:
+                removed = ledger.delete_video_asset_row(case["owner_id"], investigation_id)
+            except (LedgerError, sqlite3.Error):
+                return _unavailable()
+            if removed is not None and removed.get("__sealed__"):
+                return _video_error(409, "video_after_seal", "A sealed video cannot be removed.")
+            try:
                 ledger.finish_video_cleanup(storage_name)
             except (LedgerError, sqlite3.Error):
                 return _unavailable()
             return {"ok": True, "removed": True}
-
-        storage_name = prior.get("storageName")
-        digest = prior.get("sha256") or ""
-        byte_length = int(prior.get("byteLength") or 0)
-        try:
-            ledger.record_video_cleanup(
-                case["owner_id"], investigation_id, storage_name, digest, byte_length, "user_removed"
-            )
-        except (LedgerError, sqlite3.Error):
-            return _unavailable()
-        report = store.remove_report(storage_name)
-        if report == "failed":
-            # Asset row intentionally retained for retry; cleanup row is durable.
-            return JSONResponse(
-                status_code=500,
-                content={
-                    "ok": False,
-                    "code": "video_cleanup_failed",
-                    "message": "The video attachment could not be removed. The deletion can be retried safely.",
-                    "assetBytesDeleted": False,
-                },
-            )
-        try:
-            removed = ledger.delete_video_asset_row(case["owner_id"], investigation_id)
-        except (LedgerError, sqlite3.Error):
-            return _unavailable()
-        if removed is not None and removed.get("__sealed__"):
-            return _video_error(409, "video_after_seal", "A sealed video cannot be removed.")
-        try:
-            ledger.finish_video_cleanup(storage_name)
-        except (LedgerError, sqlite3.Error):
-            return _unavailable()
-        return {"ok": True, "removed": True}
+        finally:
+            store.release_upload_lock(lock_handle)
 
     if FRONTEND_DIR.is_dir():
         app.mount("/", FrontendFiles(directory=str(FRONTEND_DIR), html=True), name="frontend")

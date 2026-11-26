@@ -314,16 +314,18 @@ class VideoStore:
             return
 
     def try_acquire_upload_lock(self, owner_id: str):
-        """Cross-process exclusive lock for one owner's video upload.
+        """Cross-process exclusive lock for one owner's video mutations.
 
-        Returns a lock handle that must be released with ``release_upload_lock``,
-        or None when another process/thread already holds the lock.
-        Uses ``fcntl.flock`` so a crashed holder releases automatically.
+        Shared by upload/promotion, seal hashing, and delete/erasure unlinks for
+        that owner. Returns a lock handle that must be released with
+        ``release_upload_lock``, or None when another process/thread already
+        holds the lock. Uses ``fcntl.flock`` so a crashed holder releases
+        automatically when its file descriptor closes.
 
-        Topology: safe for multiple workers on **one host** sharing a local
-        filesystem with working POSIX flock semantics. This is **not** a
-        distributed multi-host lock; do not run concurrent video uploads for
-        the same owner across hosts without an external coordination layer.
+        Lock order: acquire this single owner lock only; do not nest additional
+        video locks. Topology: safe for multiple workers on **one host** sharing
+        a local filesystem with working POSIX flock semantics. This is **not** a
+        distributed multi-host lock.
         """
         if not isinstance(owner_id, str) or not owner_id or len(owner_id) > 80:
             raise VideoStoreError("The video could not be stored.")

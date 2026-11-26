@@ -32,10 +32,11 @@ class Settings(BaseSettings):
     # V1.2.A Secure Video Ingestion — defaults keep the feature inactive.
     video_ingest_enabled: bool = False
     video_allow_tier_b: bool = False
-    # Seal-path switch only. Default True embeds verified video identity into
-    # assessment snapshots when a video_assets row exists. False skips video
-    # seal checks/embedding (Stage 3.A rollback). Does not enable upload,
-    # probe, Tier B, or any ingest HTTP route; those stay gated by
+    # Seal-path switch only. Default True embeds verified video identity when a
+    # ready video_assets row exists. False never silently omits an attached
+    # video: sealing is blocked with video_seal_integration_disabled while a
+    # row remains. Investigations with no video still seal normally. Does not
+    # enable upload, probe, Tier B, or ingest HTTP; those stay gated by
     # video_ingest_enabled / video_allow_tier_b.
     video_seal_integration: bool = True
     ffprobe_path: str = ""

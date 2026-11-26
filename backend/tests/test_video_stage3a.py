@@ -342,7 +342,8 @@ def test_http_seal_returns_video_identity_mismatch(tmp_path):
     assert _snapshot_rows(path) == []
 
 
-def test_video_seal_integration_false_skips_video_block(tmp_path):
+def test_video_seal_integration_false_with_video_blocks_seal(tmp_path):
+    """Stage 3.A.1: attached video + flag false must not seal silently."""
     path = _ledger(tmp_path)
     media = tmp_path / "ok.mp4"
     payload = _ffmpeg_mp4(media)
@@ -350,22 +351,28 @@ def test_video_seal_integration_false_skips_video_block(tmp_path):
         create_app(settings=_video_settings(path, video_seal_integration=False))
     ) as client:
         _ensure_auth(client)
-        inv = _create(client, "Flag off skips video seal.")
+        inv = _create(client, "Flag off with video blocks seal.")
         assert client.post(
             f"/api/investigations/{inv}/video",
             content=payload,
             headers=_video_headers(client),
         ).status_code == 200
-        store = VideoStore.for_ledger(Path(path))
-        conn = sqlite3.connect(path)
-        conn.row_factory = sqlite3.Row
-        try:
-            storage_name = conn.execute("SELECT storage_name FROM video_assets").fetchone()[
-                "storage_name"
-            ]
-        finally:
-            conn.close()
-        store.path_for(storage_name).unlink()
+        response = client.post(f"/api/investigations/{inv}/seal")
+        assert response.status_code == 409
+        body = response.json()
+        assert body["code"] == "video_seal_integration_disabled"
+        assert "assets/video" not in json.dumps(body)
+        assert ".bin" not in json.dumps(body)
+    assert _snapshot_rows(path) == []
+
+
+def test_video_seal_integration_false_without_video_seals_normally(tmp_path):
+    path = _ledger(tmp_path)
+    with TestClient(
+        create_app(settings=_video_settings(path, video_seal_integration=False))
+    ) as client:
+        _ensure_auth(client)
+        inv = _create(client, "Flag off without video seals.")
         response = client.post(f"/api/investigations/{inv}/seal")
         assert response.status_code == 200, response.text
     body = json.loads(_snapshot_rows(path)[0]["snapshot_json"])

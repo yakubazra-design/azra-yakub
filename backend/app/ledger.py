@@ -732,13 +732,14 @@ class Ledger:
         same transaction and is omitted when the investigation has no image
         and no record was supplied.
 
-        When ``video_seal_integration`` is true (the Settings default), a
-        ``video_assets`` row for this investigation must be ``ready`` and the
-        on-disk bytes must match the recorded SHA-256 and size after a full
-        recalculation; the verified identity is stored as ``sealedVideo``.
-        An investigation with no video row seals normally. Client-supplied
-        ``sealedVideo`` / ``videoEvidence`` keys are discarded. When the
-        flag is false, video attachment state is ignored for sealing.
+        When a ``video_assets`` row exists for this investigation:
+        ``video_seal_integration`` true (Settings default) requires
+        ``ready`` status and a full on-disk SHA-256/size match, then stores
+        ``sealedVideo``; otherwise sealing fails closed. When the flag is
+        false, sealing fails with ``video_seal_integration_disabled`` — an
+        attached video is never silently omitted. No video row seals
+        normally. Client ``sealedVideo`` / ``videoEvidence`` keys are
+        discarded.
 
         ``authorize`` is not a trust-store import. A validated record with a
         policy must supply it. The callback runs once after validation and
@@ -841,59 +842,64 @@ class Ledger:
                     if not checked.get("ok"):
                         raise LedgerError("The evidence ledger is unavailable.")
                     body["provenance"] = checked["record"]
-                if video_seal_integration:
-                    video_row = conn.execute(
-                        """
-                        SELECT * FROM video_assets
-                        WHERE investigation_id = ? AND owner_id = ?
-                        """,
-                        (investigation_id, owner_id),
-                    ).fetchone()
-                    if video_row is not None:
-                        from app.video_store import VideoStore, VideoStoreError
+                video_row = conn.execute(
+                    """
+                    SELECT * FROM video_assets
+                    WHERE investigation_id = ? AND owner_id = ?
+                    """,
+                    (investigation_id, owner_id),
+                ).fetchone()
+                if video_row is not None:
+                    from app.video_store import VideoStore, VideoStoreError
 
-                        if video_row["retention"] == "retiring":
-                            raise DeletionInProgress("The evidence ledger is unavailable.")
-                        if video_row["attachment_status"] != "ready":
-                            raise LedgerError(
-                                "The evidence ledger is unavailable.",
-                                failure_code="video_not_ready",
-                            )
-                        try:
-                            video_store = VideoStore.for_ledger(self.path)
-                            video_lock = video_store.try_acquire_upload_lock(owner_id)
-                        except VideoStoreError as exc:
-                            raise LedgerError(
-                                "The evidence ledger is unavailable.",
-                                failure_code="video_identity_mismatch",
-                            ) from exc
-                        if video_lock is None:
-                            raise LedgerError(
-                                "The evidence ledger is unavailable.",
-                                failure_code="video_seal_busy",
-                            )
-                        storage_name = video_row["storage_name"]
-                        digest = str(video_row["sha256"]).strip().lower()
-                        byte_length = int(video_row["byte_length"])
-                        try:
-                            path = video_store.path_for(storage_name)
-                        except VideoStoreError as exc:
-                            raise LedgerError(
-                                "The evidence ledger is unavailable.",
-                                failure_code="video_identity_mismatch",
-                            ) from exc
-                        if not video_store.verify_path(path, digest, byte_length):
-                            raise LedgerError(
-                                "The evidence ledger is unavailable.",
-                                failure_code="video_identity_mismatch",
-                            )
-                        sealed_at = _now()
-                        body["sealedVideo"] = _sealed_video_identity(
-                            video_row,
-                            verified_sha256=digest,
-                            verified_byte_length=byte_length,
-                            sealed_at=sealed_at,
+                    if not video_seal_integration:
+                        # Attached video must never be silently omitted.
+                        raise LedgerError(
+                            "The evidence ledger is unavailable.",
+                            failure_code="video_seal_integration_disabled",
                         )
+                    if video_row["retention"] == "retiring":
+                        raise DeletionInProgress("The evidence ledger is unavailable.")
+                    if video_row["attachment_status"] != "ready":
+                        raise LedgerError(
+                            "The evidence ledger is unavailable.",
+                            failure_code="video_not_ready",
+                        )
+                    try:
+                        video_store = VideoStore.for_ledger(self.path)
+                        video_lock = video_store.try_acquire_upload_lock(owner_id)
+                    except VideoStoreError as exc:
+                        raise LedgerError(
+                            "The evidence ledger is unavailable.",
+                            failure_code="video_identity_mismatch",
+                        ) from exc
+                    if video_lock is None:
+                        raise LedgerError(
+                            "The evidence ledger is unavailable.",
+                            failure_code="video_seal_busy",
+                        )
+                    storage_name = video_row["storage_name"]
+                    digest = str(video_row["sha256"]).strip().lower()
+                    byte_length = int(video_row["byte_length"])
+                    try:
+                        path = video_store.path_for(storage_name)
+                    except VideoStoreError as exc:
+                        raise LedgerError(
+                            "The evidence ledger is unavailable.",
+                            failure_code="video_identity_mismatch",
+                        ) from exc
+                    if not video_store.verify_path(path, digest, byte_length):
+                        raise LedgerError(
+                            "The evidence ledger is unavailable.",
+                            failure_code="video_identity_mismatch",
+                        )
+                    sealed_at = _now()
+                    body["sealedVideo"] = _sealed_video_identity(
+                        video_row,
+                        verified_sha256=digest,
+                        verified_byte_length=byte_length,
+                        sealed_at=sealed_at,
+                    )
                 body["snapshotId"] = snapshot_id
                 _authorize_commit(authorize, body.get("provenance"))
                 conn.execute(
@@ -1019,6 +1025,35 @@ class Ledger:
         if not points:
             return None
         return {"snapshotId": snapshot_id, "gps": points}
+
+    def sealed_video_from_snapshot(
+        self, owner_id: str, investigation_id: str, snapshot_id: str
+    ) -> dict | None:
+        """Return the immutable ``sealedVideo`` object from one owned snapshot.
+
+        Does not rewrite the snapshot. Returns None when the snapshot is
+        missing, unowned, pending deletion, or has no sealed video object.
+        """
+        with self._transaction() as conn:
+            if _deletion_pending(conn, owner_id, investigation_id):
+                return None
+            row = conn.execute(
+                """
+                SELECT snapshot_json FROM assessment_snapshots
+                WHERE id = ? AND owner_id = ? AND investigation_id = ?
+                """,
+                (snapshot_id, owner_id, investigation_id),
+            ).fetchone()
+        if row is None:
+            return None
+        try:
+            snapshot = json.loads(row["snapshot_json"])
+        except ValueError:
+            return None
+        if not isinstance(snapshot, dict):
+            return None
+        sealed = snapshot.get("sealedVideo")
+        return sealed if isinstance(sealed, dict) else None
 
     def list_sources(self, owner_id: str, investigation_id: str) -> list[dict] | None:
         if self.get_investigation(owner_id, investigation_id) is None:
@@ -2800,6 +2835,160 @@ class Ledger:
                 (status, failure_code, investigation_id, owner_id),
             )
             return cur.rowcount > 0
+
+    def start_video_probe_run(
+        self,
+        owner_id: str,
+        investigation_id: str,
+        *,
+        isolation_tier: str = "A",
+        toolchain_version: str = "",
+    ) -> str:
+        """Insert a ``started`` probe processing run for a real user upload.
+
+        Commits immediately so FFprobe is never held inside a DB transaction.
+        Boot self-tests and canaries must not call this method.
+        """
+        if isolation_tier not in {"A"}:
+            isolation_tier = "A"
+        tool = (toolchain_version or "").strip()[:200]
+        run_id = token_hex(16)
+        started = _now()
+        try:
+            with self._transaction() as conn:
+                owned = conn.execute(
+                    "SELECT id FROM investigations WHERE id = ? AND owner_id = ?",
+                    (investigation_id, owner_id),
+                ).fetchone()
+                if owned is None:
+                    raise LedgerError("The evidence ledger is unavailable.")
+                conn.execute(
+                    """
+                    INSERT INTO video_processing_runs (
+                        id, video_asset_id, investigation_id, owner_id, stage, status,
+                        failure_code, toolchain_version, isolation_tier, started_at,
+                        finished_at, resource_ms
+                    ) VALUES (?, NULL, ?, ?, 'probe', 'started', NULL, ?, ?, ?, NULL, NULL)
+                    """,
+                    (run_id, investigation_id, owner_id, tool or None, isolation_tier, started),
+                )
+        except sqlite3.Error as exc:
+            raise LedgerError("The evidence ledger is unavailable.") from exc
+        return run_id
+
+    def complete_video_probe_run(
+        self,
+        owner_id: str,
+        run_id: str,
+        *,
+        status: str,
+        failure_code: str | None = None,
+        video_asset_id: str | None = None,
+        toolchain_version: str | None = None,
+        resource_ms: int | None = None,
+    ) -> bool:
+        """Finish a started probe run. Returns False when no owned started row exists.
+
+        Only ``succeeded``, ``failed``, or ``interrupted`` are accepted. A run
+        that is already terminal is left unchanged (idempotent retry safety).
+        Does not store paths, commands, stdout/stderr, or video bytes.
+        """
+        if status not in {"succeeded", "failed", "interrupted"}:
+            raise LedgerError("The evidence ledger is unavailable.")
+        safe_code = None
+        if failure_code is not None:
+            text = str(failure_code).strip()
+            if text and len(text) <= 80 and "/" not in text and "\\" not in text and "\0" not in text:
+                safe_code = text[:80]
+        tool = None
+        if toolchain_version is not None:
+            tool = str(toolchain_version).strip()[:200] or None
+        ms = None
+        if isinstance(resource_ms, int) and not isinstance(resource_ms, bool) and resource_ms >= 0:
+            ms = resource_ms
+        asset = None
+        if isinstance(video_asset_id, str) and video_asset_id.strip():
+            asset = video_asset_id.strip()[:64]
+        finished = _now()
+        try:
+            with self._transaction() as conn:
+                row = conn.execute(
+                    """
+                    SELECT status FROM video_processing_runs
+                    WHERE id = ? AND owner_id = ? AND stage = 'probe'
+                    """,
+                    (run_id, owner_id),
+                ).fetchone()
+                if row is None:
+                    return False
+                if row["status"] != "started":
+                    # Already terminal — treat as successful idempotent completion.
+                    return True
+                if toolchain_version is None:
+                    conn.execute(
+                        """
+                        UPDATE video_processing_runs
+                        SET status = ?, failure_code = ?, video_asset_id = ?,
+                            finished_at = ?, resource_ms = ?
+                        WHERE id = ? AND owner_id = ? AND status = 'started'
+                        """,
+                        (status, safe_code, asset, finished, ms, run_id, owner_id),
+                    )
+                else:
+                    conn.execute(
+                        """
+                        UPDATE video_processing_runs
+                        SET status = ?, failure_code = ?, video_asset_id = ?,
+                            toolchain_version = COALESCE(?, toolchain_version),
+                            finished_at = ?, resource_ms = ?
+                        WHERE id = ? AND owner_id = ? AND status = 'started'
+                        """,
+                        (status, safe_code, asset, tool, finished, ms, run_id, owner_id),
+                    )
+        except sqlite3.Error as exc:
+            raise LedgerError("The evidence ledger is unavailable.") from exc
+        return True
+
+    def video_processing_runs(
+        self,
+        owner_id: str,
+        investigation_id: str,
+    ) -> list[dict]:
+        """Owner-scoped probe runs for one investigation (no public API)."""
+        conn = self._connect()
+        try:
+            rows = conn.execute(
+                """
+                SELECT id, video_asset_id, investigation_id, owner_id, stage, status,
+                       failure_code, toolchain_version, isolation_tier, started_at,
+                       finished_at, resource_ms
+                FROM video_processing_runs
+                WHERE owner_id = ? AND investigation_id = ?
+                ORDER BY started_at ASC, id ASC
+                """,
+                (owner_id, investigation_id),
+            ).fetchall()
+            return [
+                {
+                    "id": row["id"],
+                    "videoAssetId": row["video_asset_id"],
+                    "investigationId": row["investigation_id"],
+                    "ownerId": row["owner_id"],
+                    "stage": row["stage"],
+                    "status": row["status"],
+                    "failureCode": row["failure_code"],
+                    "toolchainVersion": row["toolchain_version"],
+                    "isolationTier": row["isolation_tier"],
+                    "startedAt": row["started_at"],
+                    "finishedAt": row["finished_at"],
+                    "resourceMs": row["resource_ms"],
+                }
+                for row in rows
+            ]
+        except sqlite3.Error as exc:
+            raise LedgerError("The evidence ledger is unavailable.") from exc
+        finally:
+            conn.close()
 
     def prepare_account_deletion(self, user_id: str, password: str) -> str:
         """Block new uploads and snapshots before any image file is unlinked.
