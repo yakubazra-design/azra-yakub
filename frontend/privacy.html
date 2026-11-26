@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pilot Privacy Notice — RealityCheck AI</title>
+<meta name="description" content="Privacy notice for the RealityCheck AI controlled pilot.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap nav-inner">
+    <a href="index.html#top" class="logo" aria-label="RealityCheck AI home">
+      <svg class="logo-mark" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <circle cx="12" cy="12" r="9" stroke="#4FC7DB" stroke-width="1.6"></circle>
+        <path d="M8 12.5L10.7 15L16 9" stroke="#4FC7DB" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path>
+      </svg>
+      RealityCheck<span style="color:var(--text-muted); font-weight:400;">&nbsp;AI</span>
+    </a>
+    <ul class="nav-links">
+      <li><a href="index.html#investigate-panel">Investigate</a></li>
+      <li><a href="privacy.html" aria-current="page">Privacy</a></li>
+    </ul>
+    <div class="nav-actions">
+      <a href="index.html#investigate-panel" class="btn btn-primary btn-sm">Back to app</a>
+    </div>
+  </div>
+</header>
+
+<main class="privacy-page">
+  <article class="wrap privacy-article">
+    <p class="eyebrow"><span class="eyebrow-dot"></span>Controlled pilot disclosure</p>
+    <h1>Pilot Privacy Notice</h1>
+    <p class="privacy-lede">This notice describes what RealityCheck AI collects, processes, stores, and deletes in the current software. It is a pilot disclosure for invited users. It is <strong>not</strong> a certification of legal compliance, including under Indian privacy law. Provider retention periods and legal guarantees are not invented here.</p>
+
+    <section>
+      <h2>1. Who we are</h2>
+      <p>RealityCheck AI is an evidence-investigation tool. It helps you search for sources, compare them with a claim you submit, and optionally examine an uploaded image’s file identity and Content Credentials status. It does not guarantee that a claim or image is true.</p>
+    </section>
+
+    <section>
+      <h2>2. Information collected</h2>
+      <h3>Account and authentication</h3>
+      <ul>
+        <li>Email address</li>
+        <li>Password stored only as an Argon2id hash (not the password itself)</li>
+        <li>Session cookie token hash and CSRF token</li>
+      </ul>
+      <h3>Investigations</h3>
+      <ul>
+        <li>Submitted claims or pasted URL-related text</li>
+        <li>Extracted claims and search queries</li>
+        <li>Retrieved source URLs, titles, snippets, quality and timeline fields</li>
+        <li>Fetched page text when you request a page extract</li>
+      </ul>
+      <h3>Images</h3>
+      <ul>
+        <li>Original uploaded image bytes for supported formats: <strong>JPEG, PNG, GIF, and WebP</strong></li>
+        <li>Server SHA-256 hash, byte length, media type, and upload consent version</li>
+      </ul>
+      <h3>Image metadata (separate consent)</h3>
+      <ul>
+        <li>If you accept metadata consent, selected embedded fields such as camera, date, and location may be extracted</li>
+        <li>Precise GPS may be retained in protected sealed records when present in the file</li>
+      </ul>
+      <h3>Technical and security records</h3>
+      <ul>
+        <li>Rate-limit counters (visitor address for login and registration; account id for investigation actions)</li>
+        <li>Sealed assessment snapshots and Content Credentials status records</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>3. Image upload and metadata consent</h2>
+      <p>These are <strong>separate</strong> decisions.</p>
+      <ol>
+        <li><strong>Image upload consent</strong> — Required before the original file is sent to the RealityCheck AI server. The original bytes are stored until your account is deleted (or the image is removed in a deletion flow). Declining metadata consent does <strong>not</strong> remove embedded EXIF from the uploaded original file; those bytes may already contain GPS or camera details.</li>
+        <li><strong>Metadata extraction consent</strong> — Optional. Only if you accept does the server read allowlisted camera, date, and location fields for sealed records.</li>
+      </ol>
+      <p>The server calculates a SHA-256 of the received bytes. That hash identifies the file. It does not prove authenticity or that the pictured event happened.</p>
+      <p>On-screen GPS values shown without a reveal are rounded to two decimal places. Public assessment responses do not expose precise GPS. When retained, precise coordinates are available only through an authenticated reveal for that snapshot. A backup made before deletion can still contain the file and those fields.</p>
+    </section>
+
+    <section>
+      <h2>4. Third-party providers</h2>
+      <p>Some processing is performed by external services. RealityCheck AI does not control their retention policies. The categories below are limited to fields the current application code places in outbound provider requests.</p>
+      <h3>Parallel</h3>
+      <p>Used for search and webpage extraction (Parallel Search / Extract).</p>
+      <ul>
+        <li><strong>Search requests</strong> send: short search queries derived from the investigation (up to five), a fixed retrieval objective string (“Find sources that confirm, contradict, or provide context for the claim being investigated.”), and a Parallel <code>session_id</code> used to correlate that search call.</li>
+        <li><strong>Page extraction requests</strong> send: the page URL(s), a fixed extract objective string (“Extract the page text needed to identify the factual claims it makes.”), a Parallel <code>session_id</code>, and <code>advanced_settings.full_content</code> set to request full page content.</li>
+        <li>Retrieved titles, snippets, and page text may be stored in your investigation on the RealityCheck AI server. This application does not claim how long Parallel retains request or response copies.</li>
+      </ul>
+      <h3>OpenAI</h3>
+      <p>Used for claim extraction and assessment.</p>
+      <ul>
+        <li><strong>Claim extraction</strong> may send submitted claim text or fetched page text, capped for extraction (material truncated in the prompt).</li>
+        <li><strong>Assessment</strong> may send the primary claim, verifiable points, and a catalogue of stored sources. Each catalogue row includes publisher host (hostname only — not the full source URL), quality tier, publication date, title, and snippet text.</li>
+        <li>Assessment also may send independence-analysis fields derived from those sources: total source count, distinct publisher count, independent-count after grouping, an optional note (which may describe same-publisher groups, shared-origin groups, DOI/author/title-identifier matches, near-identical wording, or uncertain title matches when those were detected), same-publisher (host) groupings with source indexes, shared-origin groupings with source indexes, and uncertain-source indexes (possible but unconfirmed shared origin). Detailed per-index reason maps are not separately listed in the assessment prompt beyond those groupings, indexes, and the note.</li>
+        <li>Assessment also may send timeline fields derived from those sources: dated timeline entries (date, description, certainty) and a count of sources missing a publication date. Other timeline bookkeeping fields computed on the server are not added as separate structured lines in the assessment prompt.</li>
+        <li>Assessment may state whether an image file was sealed for the investigation. Image bytes, GPS, camera details, and file hashes are not included in the assessment prompt.</li>
+      </ul>
+      <p>Passwords and session cookies are not sent to these providers. Copies may remain on provider systems under their own terms — retention periods are <strong>unknown to this application</strong> and are not stated here as guarantees.</p>
+    </section>
+
+    <section>
+      <h2>5. Storage and retention</h2>
+      <p>Account and investigation data are stored in the application’s database. Image files are stored beside that database. Investigations are kept until you delete them or delete your account. The application does <strong>not</strong> currently enforce an automatic investigation expiry period.</p>
+      <p>Operators may keep backups. Recommended operator practice is multiple daily and weekly copies. The application does not automatically delete backups. Restoring a backup taken before account deletion can restore that account’s data.</p>
+    </section>
+
+    <section>
+      <h2>6. Account deletion</h2>
+      <p>When account deletion succeeds, the application removes that account’s assessment snapshots, image asset records, cleanup records, evidence sources, page fetches, claim analyses, investigations, sessions, account-scoped rate-limit rows, and the user row, and clears the session cookie. Image files are removed when possible before the database step.</p>
+      <p>Deletion does <strong>not</strong> guarantee removal of:</p>
+      <ul>
+        <li>Operator backups created earlier</li>
+        <li>Third-party provider copies</li>
+        <li>Login or registration rate-limit rows keyed by visitor address</li>
+        <li>All physical remnants on disk until operators rotate or overwrite storage</li>
+      </ul>
+      <p>If an image file cannot be removed, the account may remain so deletion can be retried safely.</p>
+    </section>
+
+    <section>
+      <h2>7. AI assessment limitations</h2>
+      <p>Automated assessments are not conclusive proof of truth. They depend on available evidence and source coverage. Insufficient evidence and unresolved outcomes are valid. Always review cited sources.</p>
+    </section>
+
+    <section>
+      <h2>8. Content Credentials (C2PA) — pilot Choice A</h2>
+      <p>For this controlled pilot, trusted C2PA credential verification is <strong>not</strong> production-ready. Content Credentials may show technical or unavailable status. Do not treat those results as trusted verification. File identity and Content Credentials do not establish that a depicted event actually happened. Provenance remains separate from the six claim-assessment outcomes.</p>
+    </section>
+
+    <section>
+      <h2>9. Security and operational disclosures</h2>
+      <p>Production deployments are expected to use HTTPS, secure session cookies, CSRF protection on state-changing requests, Argon2id password hashing, and restricted database and asset file permissions. Rate limits apply. Residual risks include third-party processing and limits of server-side URL checks when an external search provider opens its own network connection.</p>
+      <p>This notice does not publish internal secrets, trust material, or server paths.</p>
+    </section>
+
+    <section>
+      <h2>10. Contact for the pilot</h2>
+      <p class="privacy-placeholder"><strong>Operator contact not yet assigned.</strong> Insert the pilot operator email and organization name here before inviting external users. Do not invent a contact address. Until a real operator contact is assigned, inviting unsupervised external users remains blocked.</p>
+      <p>Qualified legal review is still required for applicable Indian privacy requirements, provider terms, cross-border processing, retention, and deletion rights. This page does not claim DPDP Act compliance or any other legal certification.</p>
+    </section>
+
+    <p class="privacy-back"><a class="btn btn-ghost btn-sm" href="index.html#investigate-panel">Return to investigation</a></p>
+  </article>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="footer-bottom">RealityCheck AI controlled pilot — Privacy Notice</div>
+  </div>
+</footer>
+
+</body>
+</html>

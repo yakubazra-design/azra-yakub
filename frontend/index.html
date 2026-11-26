@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RealityCheck AI — Evidence before conclusions</title>
+<meta name="description" content="RealityCheck AI investigates claims, images and information by comparing available evidence and showing you where it comes from.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<a class="skip-link" href="#investigate-panel">Skip to investigation</a>
+
+<header class="nav">
+  <div class="wrap nav-inner">
+    <a href="#top" class="logo" aria-label="RealityCheck AI home">
+      <svg class="logo-mark" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <circle cx="12" cy="12" r="9" stroke="#4FC7DB" stroke-width="1.6"></circle>
+        <path d="M8 12.5L10.7 15L16 9" stroke="#4FC7DB" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path>
+      </svg>
+      RealityCheck<span style="color:var(--text-muted); font-weight:400;">&nbsp;AI</span>
+    </a>
+    <button type="button" class="nav-mobile-toggle" id="nav-mobile-toggle" aria-expanded="false" aria-controls="primary-nav" aria-label="Open menu">Menu</button>
+    <nav id="primary-nav" class="primary-nav" aria-label="Primary">
+      <ul class="nav-links">
+        <li><a href="#how-it-works">How It Works</a></li>
+        <li><a href="#investigate-panel">Investigate</a></li>
+        <li><a href="#evidence">Evidence</a></li>
+        <li><a href="privacy.html">Privacy</a></li>
+      </ul>
+    </nav>
+    <div class="nav-actions">
+      <a href="#" class="btn btn-ghost btn-sm" id="account-btn" hidden>Account</a>
+      <a href="#" class="btn btn-ghost btn-sm" id="sign-in-btn">Sign in</a>
+      <a href="#investigate-panel" class="btn btn-primary btn-sm">Start Investigation</a>
+    </div>
+  </div>
+</header>
+
+<main id="app">
+
+<!-- ===================== HOME SCREEN ===================== -->
+<div id="screen-home">
+
+  <section class="hero" id="top">
+    <div class="wrap">
+      <span class="eyebrow"><span class="eyebrow-dot"></span>AI-powered evidence investigation</span>
+      <h1>Investigate claims.<br>Inspect the evidence.</h1>
+      <p class="hero-sub">RealityCheck AI searches available sources, compares them with your claim, and shows how much support can be established from stored evidence — not a guarantee of truth.</p>
+      <p class="hero-sub" style="margin-top:10px; color: var(--text); font-weight:500;">See the sources, quality signals, and uncertainty before you trust a conclusion.</p>
+
+      <div class="panel" id="investigate-panel">
+        <h2 class="panel-title">What do you want to check?</h2>
+        <div class="panel-input-row">
+          <label class="field-label" for="investigate-input">Claim or URL</label>
+          <textarea id="investigate-input" class="investigate-input" placeholder="Enter a claim or paste a URL…" rows="2" aria-describedby="url-format-hint url-access-hint"></textarea>
+          <p class="field-hint" id="url-format-hint">For a URL, paste a full address starting with <code>https://</code> into the Claim or URL field. The <strong>Focus field to paste URL</strong> button only focuses that existing field so you can paste there.</p>
+          <p class="field-hint" id="url-access-hint">Some websites may be inaccessible because of login requirements, privacy restrictions, website security controls, or redirects. An unavailable page does not establish that its claims are false.</p>
+
+          <div id="image-preview" class="panel-preview">
+            <span class="preview-empty">
+              <span class="panel-preview-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="5" width="18" height="14" rx="2"></rect><circle cx="8.5" cy="10" r="1.5"></circle><path d="M21 15l-5-5-9 9"></path></svg>
+              </span>
+              <span class="panel-preview-text"><strong>No image selected</strong><br>Nothing is sent until you confirm</span>
+            </span>
+            <span class="preview-filled">
+              <img id="preview-img" alt="Selected image preview">
+              <span class="panel-preview-text"><strong id="preview-filename"></strong><br>Preview stays on this device until you confirm</span>
+            </span>
+          </div>
+          <p class="field-hint" id="image-format-hint">Supported image formats: JPEG, PNG, GIF, and WebP.</p>
+          <input type="file" id="image-file-input" accept="image/jpeg,image/png,image/gif,image/webp" style="display:none">
+
+          <div id="image-metadata-block" class="understanding-block" style="margin-top:14px; display:none;"></div>
+          <div id="image-send-choice" class="understanding-block" style="margin-top:14px; display:none;">
+            <div class="image-send-disclosure" id="image-send-disclosure">
+              <p><strong>When the image is sent:</strong> Choosing <strong>Send image for file identity</strong> marks the selected file to upload when you later click <strong>Check now</strong> (after investigation consent and sign-in). Nothing leaves this device until you confirm send and then check the claim.</p>
+              <p><strong>What is uploaded:</strong> The original file (JPEG, PNG, GIF, or WebP) goes to the RealityCheck AI server. Those bytes are retained until the account is deleted (or the image is removed in a deletion flow). Image bytes are not sent to the assessment model.</p>
+              <p><strong>File identity:</strong> The server calculates a SHA-256 of the received bytes. That hash identifies the file. It does not prove authenticity or that the pictured event is true.</p>
+              <p><strong>If you decline metadata consent:</strong> Declining does <strong>not</strong> strip embedded EXIF (including GPS and camera details) from the uploaded original. The server will not read those camera, date, and location fields for analysis, but the embedded data may still remain inside the stored file.</p>
+            </div>
+            <label class="consent-label" for="metadata-consent">
+              <input type="checkbox" id="metadata-consent">
+              <span>Separate consent: allow the server to read camera, date, and location fields. On-screen GPS values shown without a reveal are rounded to two decimal places. The server may keep precise coordinates in protected sealed records and show them only after you ask. Public results do not expose precise GPS until you request a reveal. A backup made before deletion can still contain the file and those fields. <a href="privacy.html">Privacy Notice</a></span>
+            </label>
+            <div class="panel-tools">
+              <button type="button" class="tool-btn" id="send-image-btn">Send image for file identity</button>
+              <button type="button" class="tool-btn" id="keep-image-btn">Keep the image on this device</button>
+            </div>
+            <p class="demo-note" id="image-send-status"></p>
+          </div>
+
+          <div class="panel-tools">
+            <button type="button" class="tool-btn" id="upload-btn" aria-describedby="image-format-hint">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M12 16V4M12 4L7 9M12 4l5 5"></path><path d="M4 16v3a2 2 0 002 2h12a2 2 0 002-2v-3"></path></svg>
+              Upload Image
+            </button>
+            <button type="button" class="tool-btn" id="url-btn" aria-describedby="url-format-hint url-access-hint">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M9 15l6-6M10 6.5l.7-.7a3.5 3.5 0 015 5l-.7.7M14 17.5l-.7.7a3.5 3.5 0 01-5-5l.7-.7"></path></svg>
+              Focus field to paste URL
+            </button>
+          </div>
+
+          <div class="submit-disclosure" id="submit-disclosure">
+            <p>Before you check: RealityCheck AI will store your claim and any retrieved sources in your account. One investigation may call <strong>OpenAI</strong> for claim extraction and assessment, and <strong>Parallel</strong> for search (and page extraction when you submit a URL). Automated results are not proof of truth. Avoid submitting sensitive personal information about others without authority or consent.</p>
+            <p class="submit-cost-note" id="submit-cost-note">Provider usage: extraction, search, and assessment calls may each run once for a typical claim check. This product does not display dollar amounts because exact billing figures are not available from the providers in this app.</p>
+            <label class="consent-label" for="investigation-consent">
+              <input type="checkbox" id="investigation-consent">
+              <span>I understand that my claim and derived search queries may be sent to Parallel and OpenAI, that results are stored in my account, and that automated assessments are not proof of truth. I have read the <a href="privacy.html">Pilot Privacy Notice</a>.</span>
+            </label>
+          </div>
+
+          <div class="live-limit-note" id="live-limit-note">
+            <p class="live-limit-intro"><strong>Live assessment limitation:</strong> <strong>Verified</strong> and <strong>Partially verified</strong> are not confirmed by the current evidence checks. When support is not established, the result is <strong>Unresolved</strong> (or <strong>Insufficient evidence</strong> when nothing usable was retrieved). <strong>Contradicted</strong> and <strong>Potential manipulation</strong> appear only when strict literal conditions in stored source text are met.</p>
+            <p class="live-limit-outcomes-label" id="live-limit-outcomes-label">Official outcomes:</p>
+            <ul class="live-limit-outcomes" aria-labelledby="live-limit-outcomes-label">
+              <li><strong>Verified</strong></li>
+              <li><strong>Partially verified</strong></li>
+              <li><strong>Unresolved</strong></li>
+              <li><strong>Insufficient evidence</strong></li>
+              <li><strong>Contradicted</strong></li>
+              <li><strong>Potential manipulation</strong></li>
+            </ul>
+          </div>
+
+          <div class="panel-submit-row">
+            <span class="panel-hint" id="panel-hint">Evidence first. Conclusions second.</span>
+            <div class="check-actions">
+              <p class="consent-gate-hint" id="consent-gate-hint">Confirm the investigation consent checkbox before checking a claim.</p>
+              <button type="button" class="btn btn-primary check-btn is-consent-blocked" id="check-btn" aria-disabled="true" aria-describedby="consent-gate-hint">Check now</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="features">
+    <div class="wrap">
+      <div class="block-head">
+        <h2>Try an example</h2>
+        <p>See the kind of thing RealityCheck is built to investigate.</p>
+      </div>
+      <div class="examples-grid">
+
+        <div class="example-card">
+          <span class="example-kind">Health claim</span>
+          <p class="example-q">Is this widely shared health advice supported by evidence?</p>
+          <button class="example-try" data-claim="Scientists have discovered that drinking warm water cures diabetes.">Try example →</button>
+        </div>
+
+        <div class="example-card">
+          <span class="example-kind">News claim</span>
+          <p class="example-q">Is this statement supported by reliable sources?</p>
+          <button class="example-try" data-claim="A recent statement claims unemployment fell to a 10-year low this quarter.">Try example →</button>
+        </div>
+
+        <div class="example-card">
+          <span class="example-kind">Online claim</span>
+          <p class="example-q">Can this information be independently verified?</p>
+          <button class="example-try" data-claim="A widely shared post states that a new law bans a common household product nationwide.">Try example →</button>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="how-it-works">
+    <div class="wrap">
+      <div class="block-head">
+        <h2>How RealityCheck investigates</h2>
+        <p>Four steps, applied to every claim or URL you submit.</p>
+      </div>
+      <div class="steps-grid">
+        <div class="step-item">
+          <div class="step-num">01</div>
+          <div class="step-title">Understand</div>
+          <div class="step-desc">Identify exactly what is being claimed.</div>
+        </div>
+        <div class="step-item">
+          <div class="step-num">02</div>
+          <div class="step-title">Investigate</div>
+          <div class="step-desc">Find relevant available sources and original material.</div>
+        </div>
+        <div class="step-item">
+          <div class="step-num">03</div>
+          <div class="step-title">Cross-check</div>
+          <div class="step-desc">Compare sources, dates, origins and contradictions.</div>
+        </div>
+        <div class="step-item">
+          <div class="step-num">04</div>
+          <div class="step-title">Assess</div>
+          <div class="step-desc">Present the evidence and explain the uncertainty.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="evidence">
+    <div class="wrap">
+      <div class="block-head">
+        <h2>The evidence chain</h2>
+        <p>Instead of simply giving you an answer, RealityCheck shows how the conclusion was reached.</p>
+      </div>
+      <div class="chain" id="chain-home"><div class="chain-node"><span class="chain-dot"></span><span class="chain-label">Claim</span></div><div class="chain-line"></div><div class="chain-node"><span class="chain-dot"></span><span class="chain-label">Evidence</span></div><div class="chain-line"></div><div class="chain-node"><span class="chain-dot"></span><span class="chain-label">Sources</span></div><div class="chain-line"></div><div class="chain-node"><span class="chain-dot"></span><span class="chain-label">Original material</span></div><div class="chain-line"></div><div class="chain-node"><span class="chain-dot"></span><span class="chain-label">Timeline</span></div><div class="chain-line"></div><div class="chain-node"><span class="chain-dot"></span><span class="chain-label">Cross-check</span></div><div class="chain-line"></div><div class="chain-node"><span class="chain-dot"></span><span class="chain-label">Contradictions</span></div><div class="chain-line"></div><div class="chain-node"><span class="chain-dot"></span><span class="chain-label">Assessment</span></div></div>
+      <p class="chain-caption">A URL or a claim isn't evidence by itself — evidence is what's found when a source is checked against original material, dates and other sources.</p>
+    </div>
+  </section>
+
+  <section class="block" id="about">
+    <div class="wrap">
+      <div class="block-head">
+        <h2>How a check is assessed</h2>
+        <p>RealityCheck uses six official assessment outcomes. It does not claim certainty it does not have, and live results stay conservative when support is not confirmed.</p>
+        <p>All six names belong to the official assessment vocabulary. In the current build, Verified and Partially verified are not confirmed by the live evidence checks—when support is not established, the result is Unresolved. Insufficient evidence and Unresolved are currently supported. Contradicted and Potential manipulation appear only when strict literal conditions in stored source text are met.</p>
+      </div>
+      <div class="assess-grid">
+        <div class="assess-card" style="--c: var(--verified)">
+          <div class="assess-title">Verified</div>
+          <div class="assess-desc">Defined when strong, confirmed support is established. Not confirmed by the current live checks.</div>
+        </div>
+        <div class="assess-card" style="--c: var(--partial)">
+          <div class="assess-title">Partially verified</div>
+          <div class="assess-desc">Defined when only some parts are confirmed. Not confirmed by the current live checks.</div>
+        </div>
+        <div class="assess-card" style="--c: var(--contradicted)">
+          <div class="assess-title">Contradicted</div>
+          <div class="assess-desc">A cited stored sentence is a direct literal negation of the claim. Requires that strict condition.</div>
+        </div>
+        <div class="assess-card" style="--c: var(--insufficient)">
+          <div class="assess-title">Insufficient evidence</div>
+          <div class="assess-desc">There is not enough stored evidence to reach a conclusion. Currently supported in live checks.</div>
+        </div>
+        <div class="assess-card" style="--c: var(--unresolved)">
+          <div class="assess-title">Unresolved</div>
+          <div class="assess-desc">Support could not be confirmed, or available evidence conflicts. Currently supported in live checks.</div>
+        </div>
+        <div class="assess-card" style="--c: var(--manipulation)">
+          <div class="assess-title">Potential manipulation</div>
+          <div class="assess-desc">A cited stored sentence names the sealed file and states fabrication. Requires that strict condition.</div>
+        </div>
+      </div>
+      <p class="disclaimer">RealityCheck AI does not guarantee truth. Assessments depend on available evidence and source coverage. Insufficient evidence and unresolved outcomes are valid. Always review cited sources. File identity and Content Credentials do not prove that a depicted event happened. See the <a href="privacy.html">Pilot Privacy Notice</a>.</p>
+    </div>
+  </section>
+
+</div>
+
+<!-- ===================== INVESTIGATING SCREEN ===================== -->
+<div id="screen-investigating" class="hidden">
+  <div class="investigating-wrap">
+    <div class="investigating-card">
+      <div class="spinner" aria-hidden="true"></div>
+      <h2 class="investigating-title">Investigating…</h2>
+      <p class="investigating-claim" id="investigating-claim-text"></p>
+
+      <ul class="check-list" id="check-list" aria-live="polite">
+        <li class="check-item" data-step="0"><span class="check-icon"><svg viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-6" stroke="#6FCF97" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path></svg></span>Extracting the claim</li>
+        <li class="check-item" data-step="1"><span class="check-icon"><svg viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-6" stroke="#6FCF97" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path></svg></span>Searching sources</li>
+        <li class="check-item" data-step="2"><span class="check-icon"><svg viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-6" stroke="#6FCF97" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path></svg></span>Assessing sealed evidence</li>
+      </ul>
+
+      <p class="demo-note" id="investigating-status" style="margin-top:22px; text-align:left;"></p>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== RESULTS SCREEN ===================== -->
+<div id="screen-results" class="hidden">
+  <div class="wrap results-wrap">
+    <div class="results-topbar">
+      <button class="btn btn-ghost btn-sm" id="back-btn">← New check</button>
+      <span class="demo-tag" id="results-mode-tag"></span>
+    </div>
+    <p class="demo-note" id="results-mode-note" style="margin-top:-20px; margin-bottom:16px;"></p>
+    <p class="demo-note results-limitations" id="results-limitations">Assessments depend on available evidence. Insufficient evidence and unresolved findings are valid outcomes. Verified and Partially verified are not confirmed by the live evidence checks. Inspect cited sources. File identity and Content Credentials do not establish that a depicted event happened. For this pilot, trusted C2PA verification is not production-ready — technical or unavailable Content Credentials are not trusted verification. <a href="privacy.html">Privacy Notice</a></p>
+    <p class="demo-note" id="results-provider-activity" hidden></p>
+
+    <div class="claim-card">
+      <div class="claim-label">Claim submitted</div>
+      <p class="claim-text" id="results-claim-text"></p>
+      <div class="claim-meta">
+        <div class="meta-item">
+          <div class="meta-k">Assessment</div>
+          <div class="meta-v" id="results-assessment"></div>
+        </div>
+        <div class="meta-item">
+          <div class="meta-k">Evidence basis</div>
+          <div class="meta-v" id="results-basis"></div>
+          <div class="confidence-caption">No numeric score — source quality is shown per source instead.</div>
+        </div>
+      </div>
+      <button class="why-toggle" id="why-toggle" aria-expanded="false" aria-controls="why-panel">Why this assessment?</button>
+    </div>
+
+    <div id="results-body"></div>
+
+    <div class="results-actions">
+      <button class="btn btn-primary" id="new-check-btn">Start a new check</button>
+      <button class="btn btn-ghost" id="back-btn-2">Back to home</button>
+    </div>
+  </div>
+</div>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="footer-top">
+      <div class="footer-brand">
+        <a href="#top" class="logo" style="margin-bottom:8px;">
+          <svg class="logo-mark" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <circle cx="12" cy="12" r="9" stroke="#4FC7DB" stroke-width="1.6"></circle>
+            <path d="M8 12.5L10.7 15L16 9" stroke="#4FC7DB" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path>
+          </svg>
+          RealityCheck<span style="color:var(--text-muted); font-weight:400;">&nbsp;AI</span>
+        </a>
+        <p class="footer-tag">Evidence before conclusions.</p>
+      </div>
+      <ul class="footer-links">
+        <li><a href="#how-it-works">How It Works</a></li>
+        <li><a href="#features">Features</a></li>
+        <li><a href="privacy.html">Privacy Notice</a></li>
+      </ul>
+    </div>
+    <div class="footer-bottom">Controlled pilot — evidence before conclusions. Not a legal compliance certification.</div>
+  </div>
+</footer>
+
+<div class="auth-dialog" id="auth-dialog" hidden role="presentation">
+  <div class="panel auth-panel" role="dialog" aria-modal="true" aria-labelledby="auth-title" tabindex="-1">
+    <h2 class="panel-title" id="auth-title">Sign in</h2>
+    <p class="panel-hint" id="auth-note">Sign in to save and review your investigations.</p>
+    <p class="auth-password-rules" id="auth-password-rules" hidden>Password requirements: At least 12 characters and no more than 128 characters.</p>
+    <form id="auth-form">
+      <label class="auth-label" for="auth-email">Email
+        <input id="auth-email" class="auth-input" type="email" autocomplete="username" required>
+      </label>
+      <label class="auth-label" for="auth-password">Password
+        <input id="auth-password" class="auth-input" type="password" autocomplete="current-password" required minlength="12" maxlength="128">
+      </label>
+      <p class="auth-error" id="auth-error" hidden></p>
+      <div class="panel-submit-row">
+        <button type="button" class="btn btn-ghost btn-sm" id="auth-switch">Create an account</button>
+        <span>
+          <button type="button" class="btn btn-ghost btn-sm" id="auth-cancel">Close</button>
+          <button type="submit" class="btn btn-primary btn-sm" id="auth-submit">Sign in</button>
+        </span>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="auth-dialog" id="account-dialog" hidden role="presentation">
+  <div class="panel auth-panel account-panel" role="dialog" aria-modal="true" aria-labelledby="account-title" tabindex="-1">
+    <h2 class="panel-title" id="account-title">Your account</h2>
+    <p class="panel-hint">Delete your account only if you understand the limits below. This uses the existing account-deletion API with your password and CSRF protection. It does not delete operator backups or third-party provider copies.</p>
+    <ul class="account-limits">
+      <li>Removes your investigations, snapshots, stored images when possible, sessions, and account row.</li>
+      <li>Does not guarantee removal of earlier backups, Parallel/OpenAI copies, visitor-IP rate-limit rows, or all disk remnants.</li>
+      <li>If an image file cannot be removed, the account may remain so you can retry safely.</li>
+    </ul>
+    <p class="demo-note">Full details: <a href="privacy.html">Pilot Privacy Notice</a>.</p>
+    <form id="account-delete-form">
+      <label class="auth-label" for="account-delete-password">Confirm with your current password
+        <input id="account-delete-password" class="auth-input" type="password" autocomplete="current-password" required minlength="12">
+      </label>
+      <label class="consent-label" for="account-delete-confirm">
+        <input type="checkbox" id="account-delete-confirm" required>
+        <span>I understand deletion cannot erase old backups or provider copies, and I want to delete this account.</span>
+      </label>
+      <p class="auth-error" id="account-delete-error" hidden></p>
+      <p class="demo-note" id="account-delete-status" hidden></p>
+      <div class="panel-submit-row">
+        <button type="button" class="btn btn-ghost btn-sm" id="account-cancel">Close</button>
+        <button type="submit" class="btn btn-primary btn-sm" id="account-delete-submit">Delete account</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="tooltip-msg" id="tooltip" role="status"></div>
+
+<script src="vendor/exifr-7.1.3.umd.js"></script>
+<script src="engine.js"></script>
+</body>
+</html>
